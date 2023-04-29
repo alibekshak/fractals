@@ -3,6 +3,18 @@ import re
 
 # Добавляем параметры 
 
+# список функций для управления параметаризированными командами
+# у всех функций будет префикс cmd_ и первый параметр t - черепашка
+def cmd_turtle_fd(t, length, *args):
+    t.pensize(args[1])
+    t.fd(length*args[0])
+
+def cmd_turtle_left(t, angle, *args):
+    t.left(angle * args[0])
+
+def cmd_turtle_right(t, angle, *args):
+    t.right(angle * args[0])
+
 class LSystem:
     def __init__(self, t, axiom, width, length, angle):
         self.axiom = axiom # инициатр
@@ -15,14 +27,16 @@ class LSystem:
         self.t.pensize(self.width) # ширина линии рисования
         self.key_re_list = [] # шаблон команд
         self.cmd_functions = {}  # словарь связей параметаризованных команд и функций
+        self.function_key = None
 
-        
     def add_rules(self, *rules):
         for key, value in rules:
             key_re = ""  
             if not isinstance(value, str): # ключ с параметрами
                 key_re = key.replace("(", r"\(")
                 key_re = key_re.replace(")", r"\)")
+                key_re = key_re.replace("+", r"\+")
+                key_re = key_re.replace("-", r"\-")
                 key_re = re.sub(r"([a-z]+)([, ]*)", lambda m: r"([-+]?\b\d+(?:\.\d+)?\b)" + m.group(2), key_re)
                 self.key_re_list.append(key_re)
 
@@ -55,6 +69,11 @@ class LSystem:
         self.t.seth(my_tuple[2]) # угол поварота
         self.t.down()
 
+    def add_rules_move(self, *moves):
+        for key, func in moves:
+            self.cmd_functions[key] = func
+
+
     def drow_turtle(self, start_pos, start_angle):
         turtle.tracer(1, 0) # скорость черепашки
         self.t.up() # черепашка поднимается на верх
@@ -62,20 +81,36 @@ class LSystem:
         self.t.seth(start_angle) # начальный угол поворота 
         self.t.down() # черепашка опускается вниз
         turtle_stack = []# хранит данные для ветвления
-        for move in self.state:
-            if move == "F":
-                self.t.forward(self.length)
-            elif move == "S": # для формирования более сложных фракталов
-                self.t.up()
-                self.t.forward(self.length)
-                self.t.down()
-            elif move == "+":
-                self.t.left(self.angle)
-            elif move == "-":
-                self.t.right(self.angle)
-            elif move == "[":
+        key_list_re = "|".join(self.key_re_list)
+
+        for value in re.finditer(r"(" + key_list_re + r"|.)", self.state):
+            cmd = value.group(0)
+            args = [float(x) for x in value.groups()[1:] if x]
+            if 'F' in cmd:
+                if len(args) > 0 and self.cmd_functions.get('F'):
+                    self.cmd_functions['F'](t, self.length, *args)
+                else:
+                    self.t.fd(self.length)
+            elif 'S' in cmd:
+                if len(args) > 0 and self.cmd_functions.get('S'):
+                    self.cmd_functions['S'](t, self.length, *args)
+                else:
+                    self.t.up()
+                    self.t.forward(self.length)
+                    self.t.down()
+            elif '+' in cmd:
+                if len(args) > 0 and self.cmd_functions.get('+'):
+                    self.cmd_functions['+'](t, self.angle, *args)
+                else:
+                    self.t.left(self.angle)
+            elif '-' in cmd:
+                if len(args) > 0 and self.cmd_functions.get('-'):
+                    self.cmd_functions['-'](t, self.angle, *args)
+                else:
+                    self.t.right(self.angle)
+            elif "[" in cmd:
                 turtle_stack.append((self.t.xcor(), self.t.ycor(), self.t.heading(), self.t.pensize()))
-            elif move == "]":
+            elif "]" in cmd:
                 xcor, ycor, head, w = turtle_stack.pop()
                 self.set_turtle((xcor, ycor, head))
                 self.width = w
@@ -92,12 +127,17 @@ t = turtle.Turtle()
 t.ht() #  прописываем что бы черепашка не была видна
 
 pen_width = 2 # толщина линни рисования 
-f_len = 8# длина одного сегмента прямой (в пикселах)
+f_len = 20 # длина одного сегмента прямой (в пикселах)
 angle = 33 # фиксированный угол поворота 
-axiom = "F(1)+A(1)"
+axiom = "A"
 
 l_sys = LSystem(t, axiom, pen_width, f_len, angle)
-l_sys.add_rules(("A(x)", lambda x: f"F({x+1})+A({x+1})"))
-l_sys.generate_path(6) # колличество итерации
+l_sys.add_rules(("A", "F(1, 1)[+(1)A][-(1)A]"),
+                ("F(x, y)", lambda x, y: f"F({1.5*x}, {1.7*y})"), # талщина дерева
+                ("+(x)", lambda x: f"+({1.1*x})"), # длина элементов дерева
+                ("-(x)", lambda x: f"-({1.1*x})"), # углы поварота
+                )
+l_sys.add_rules_move(("F", cmd_turtle_fd), ("+", cmd_turtle_left), ("-", cmd_turtle_right))
+l_sys.generate_path(5) # колличество итерации
 l_sys.drow_turtle((0, -200), 90)
 
