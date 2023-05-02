@@ -1,5 +1,6 @@
 import turtle
 import re
+import random
 
 # Добавляем параметры 
 
@@ -9,11 +10,11 @@ def cmd_turtle_fd(t, length, *args):
     t.pensize(args[1])
     t.fd(length*args[0])
 
-def cmd_turtle_left(t, angle, *args):
-    t.left(angle * args[0])
+def cmd_turtle_left(t, angle, *args): # поварачивает черепашку влево
+    t.left(args[0]) 
 
-def cmd_turtle_right(t, angle, *args):
-    t.right(angle * args[0])
+def cmd_turtle_right(t, angle, *args): # поварачивает вправо
+    t.right(args[0])
 
 class LSystem:
     def __init__(self, t, axiom, width, length, angle):
@@ -132,10 +133,10 @@ angle = 33 # фиксированный угол поворота
 axiom = "A"
 
 l_sys = LSystem(t, axiom, pen_width, f_len, angle)
-l_sys.add_rules(("A", "F(1, 1)[+(1)A][-(1)A]"),
-                ("F(x, y)", lambda x, y: f"F({1.5*x}, {1.7*y})"), # талщина дерева
-                ("+(x)", lambda x: f"+({1.1*x})"), # длина элементов дерева
-                ("-(x)", lambda x: f"-({1.1*x})"), # углы поварота
+l_sys.add_rules(("A", f"F(1, 1)[+({angle}))A][-({angle})A]"),
+                ("F(x, y)", lambda x, y: f"F({(1.2+random.triangular(-0.5, 0.5, random.gauss(0, 1)))*x}, {1.4*y})"), # талщина дерева
+                ("+(x)", lambda x: f"+({x + random.triangular(-10, 10, random.gauss(0,2))})"), # длина элементов дерева
+                ("-(x)", lambda x: f"-({x + random.triangular(-10, 10, random.gauss(0,2))})"), # углы поварота
                 )
 l_sys.add_rules_move(("F", cmd_turtle_fd), ("+", cmd_turtle_left), ("-", cmd_turtle_right))
 l_sys.generate_path(5) # колличество итерации
