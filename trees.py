@@ -28,39 +28,60 @@ class LSystem:
         self.t.pensize(self.width) # ширина линии рисования
         self.key_re_list = [] # шаблон команд
         self.cmd_functions = {}  # словарь связей параметаризованных команд и функций
-        self.function_key = None
+        self.rules_key = None
 
     def add_rules(self, *rules):
-        for key, value in rules:
-            key_re = ""  
-            if not isinstance(value, str): # ключ с параметрами
-                key_re = key.replace("(", r"\(")
-                key_re = key_re.replace(")", r"\)")
-                key_re = key_re.replace("+", r"\+")
-                key_re = key_re.replace("-", r"\-")
+        for r in rules:
+            p = 1
+            if len(r) == 3:
+                key, value, p = r
+            else:
+                key, value = r
+
+            key_re = key.replace("(", r"\(")
+            key_re = key_re.replace(")", r"\)")
+            key_re = key_re.replace("+", r"\+")
+            key_re = key_re.replace("-", r"\-")
+
+            if not isinstance(value, str):  # ключ с параметрами
                 key_re = re.sub(r"([a-z]+)([, ]*)", lambda m: r"([-+]?\b\d+(?:\.\d+)?\b)" + m.group(2), key_re)
                 self.key_re_list.append(key_re)
 
-            self.rules[key] = (value, key_re)
+            if not self.rules.get(key):
+                self.rules[key] = [(value, key_re, p)]
+            else:
+                self.rules[key].append((value, key_re, p))
+
+    def get_random_rule(self, rules):
+        p = random.random()  # случайное число в интервале [0; 1]
+        off = 0
+        for v in rules:
+            if p < (v[2]+off):
+                return v
+            off += v[2]
+
+        return rules[0]
 
 
     def update_param_cmd(self, m):
-        if not self.function_key: # ссылается на lambda функцию
+        if not self.rules_key:
             return ""
 
-        args = list(map(float, m.groups()))
-        return self.function_key(*args).lower()
+        rule = self.rules_key[0] if len(self.rules_key) == 1 else self.get_random_rule(self.rules_key)
+
+        if isinstance(rule[0], str):
+            return rule[0].lower()
+        else:
+            args = list(map(float, m.groups()))
+            return rule[0](*args).lower()
 
 
     def generate_path(self, n_iter):
         for n in range(n_iter):
-            for key, value in self.rules.items():
-                if isinstance(value[0], str):
-                    self.state = self.state.replace(key, value[0].lower())
-                else:   # команда с параметром
-                    self.function_key = value[0]   # ссылка на лямбда-функцию
-                    self.state = re.sub(value[1], self.update_param_cmd, self.state)
-                    self.function_key = None
+            for key, rules in self.rules.items():
+                self.rules_key = rules
+                self.state = re.sub(rules[0][1], self.update_param_cmd, self.state)
+                self.rules_key = None
 
             self.state = self.state.upper()
 
@@ -76,7 +97,7 @@ class LSystem:
 
 
     def drow_turtle(self, start_pos, start_angle):
-        turtle.tracer(1, 0) # скорость черепашки
+        turtle.tracer(0, 0) # скорость черепашки
         self.t.up() # черепашка поднимается на верх
         self.t.setpos(start_pos) # начальная стартовая позиция
         self.t.seth(start_angle) # начальный угол поворота 
@@ -129,15 +150,20 @@ t.ht() #  прописываем что бы черепашка не была в
 
 pen_width = 2 # толщина линни рисования 
 f_len = 20 # длина одного сегмента прямой (в пикселах)
-angle = 33 # фиксированный угол поворота 
+angle = 20 # фиксированный угол поворота 
 axiom = "A"
 
 l_sys = LSystem(t, axiom, pen_width, f_len, angle)
-l_sys.add_rules(("A", f"F(1, 1)[+({angle}))A][-({angle})A]"),
-                ("F(x, y)", lambda x, y: f"F({(1.2+random.triangular(-0.5, 0.5, random.gauss(0, 1)))*x}, {1.4*y})"), # талщина дерева
-                ("+(x)", lambda x: f"+({x + random.triangular(-10, 10, random.gauss(0,2))})"), # длина элементов дерева
-                ("-(x)", lambda x: f"-({x + random.triangular(-10, 10, random.gauss(0,2))})"), # углы поварота
+l_sys.add_rules(("A", f"F(1, 1)[+({angle})A][-({angle})A]", 0.5),
+                ("A", f"F(1, 1)[++({angle})A][+({angle})A][-({angle})A][--({angle})A]", 0.4),
+                ("A", f"F(1, 1)[-({angle})A]", 0.05),
+                ("A", f"F(1, 1)[+({angle})A]", 0.05),
+
+                ("F(x, y)", lambda x, y: f"F({(1.2+random.triangular(-0.5, 0.5, random.gauss(0, 1)))*x}, {1.4*y})"),
+                ("+(x)", lambda x: f"+({x + random.triangular(-10, 10, random.gauss(0, 2))})"),
+                ("-(x)", lambda x: f"-({x + random.triangular(-10, 10, random.gauss(0, 2))})"),
                 )
+
 l_sys.add_rules_move(("F", cmd_turtle_fd), ("+", cmd_turtle_left), ("-", cmd_turtle_right))
 l_sys.generate_path(5) # колличество итерации
 l_sys.drow_turtle((0, -200), 90)
